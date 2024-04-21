@@ -45,13 +45,33 @@ export class OrdersService extends PrismaClient implements OnModuleInit {
           status: OrderStatus.PENDING,
           OrderItem: {
             createMany: {
-              data: []
+              data: createOrderDto.items.map((orderItem) => ({
+                price: products.find(product => product.id === orderItem.productId).price,
+                productId: orderItem.productId,
+                quantity: orderItem.quantity
+              }))
+            },
+          }
+
+        },
+        include: {
+          OrderItem: {
+            select: {
+              price: true,
+              quantity: true,
+              productId: true
             }
           }
         }
       });
 
-      return order;
+      return {
+        ...order,
+        OrderItem: order.OrderItem.map((orderItem) => ({
+          ...orderItem,
+          name: products.find(product => product.id === orderItem.productId).name
+        }))
+      };
 
 
 
