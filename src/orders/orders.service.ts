@@ -1,8 +1,10 @@
-import { HttpStatus, Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { HttpStatus, Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { PrismaClient } from '@prisma/client';
-import { RpcException } from '@nestjs/microservices';
+import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { PaginationOrderDto, UpdateOrderStatusDto } from './dto';
+import { PRODUCTS_SERVICE } from 'src/common/config/services';
+import { firstValueFrom } from 'rxjs';
 
 
 @Injectable()
@@ -10,18 +12,23 @@ export class OrdersService extends PrismaClient implements OnModuleInit {
 
   private readonly logger = new Logger('OrdersService');
 
+  constructor(@Inject(PRODUCTS_SERVICE) private readonly productsClient: ClientProxy) {
+    super();
+  }
+
 
   async onModuleInit() {
     await this.$connect();
     this.logger.log('Database connected');
   }
 
-  create(createOrderDto: CreateOrderDto) {
-    
-    return {
-      service: 'Orders Microservice',
-      createOrderDto: createOrderDto
-    }
+  async create(createOrderDto: CreateOrderDto) {
+
+    const ids = [20, 21];
+
+    const products = await firstValueFrom(this.productsClient.send({cdm: 'validate_products'}, ids));
+
+    return products;
 
   }
 
@@ -39,7 +46,7 @@ export class OrdersService extends PrismaClient implements OnModuleInit {
 
     return {
       data: await this.order.findMany({
-        skip: ( currentPage - 1 ) * perPage,
+        skip: (currentPage - 1) * perPage,
         take: perPage,
         where: {
           status: orderPaginationDto.status
@@ -48,11 +55,11 @@ export class OrdersService extends PrismaClient implements OnModuleInit {
       meta: {
         total: totalPages,
         page: currentPage,
-        lastPage: Math.ceil( totalPages / perPage )
+        lastPage: Math.ceil(totalPages / perPage)
       }
     }
   }
-  
+
 
   async findOne(id: string) {
 
@@ -60,10 +67,10 @@ export class OrdersService extends PrismaClient implements OnModuleInit {
       where: { id }
     });
 
-    if ( !order ) {
-      throw new RpcException({ 
-        status: HttpStatus.NOT_FOUND, 
-        message: `Order with id ${ id } not found`
+    if (!order) {
+      throw new RpcException({
+        status: HttpStatus.NOT_FOUND,
+        message: `Order with id ${id} not found`
       });
     }
 
@@ -76,7 +83,7 @@ export class OrdersService extends PrismaClient implements OnModuleInit {
     const { id, status } = changeOrderStatusDto;
 
     const order = await this.findOne(id);
-    if ( order.status === status ) {
+    if (order.status === status) {
       return order;
     }
 
