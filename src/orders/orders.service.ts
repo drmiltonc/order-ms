@@ -2,103 +2,91 @@ import { HttpStatus, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { PrismaClient } from '@prisma/client';
 import { RpcException } from '@nestjs/microservices';
-import { PaginationOrderDto } from './dto';
+import { PaginationOrderDto, UpdateOrderStatusDto } from './dto';
+
 
 @Injectable()
 export class OrdersService extends PrismaClient implements OnModuleInit {
 
   private readonly logger = new Logger('OrdersService');
 
+
   async onModuleInit() {
     await this.$connect();
-    this.logger.log('Database Connected')
+    this.logger.log('Database connected');
   }
 
-  async createOrder(createOrderDto: CreateOrderDto) {
-    const order = await this.order.create({
-      data: createOrderDto,
-    });
-    return order;
+  create(createOrderDto: CreateOrderDto) {
+    
+    return this.order.create({
+      data: createOrderDto
+    })
+
   }
 
-  async getAllOrders(paginationOrderDto: PaginationOrderDto) {
+  async findAll(orderPaginationDto: PaginationOrderDto) {
 
     const totalPages = await this.order.count({
       where: {
-        status: paginationOrderDto.status
+        status: orderPaginationDto.status
       }
     });
 
-    const currentPage = paginationOrderDto.page;
+    const currentPage = orderPaginationDto.page;
+    const perPage = orderPaginationDto.limit;
 
-    const perPage = paginationOrderDto.limit;
 
-    const orders = {
+    return {
       data: await this.order.findMany({
-        skip: (currentPage - 1) * perPage,
+        skip: ( currentPage - 1 ) * perPage,
         take: perPage,
         where: {
-          status: paginationOrderDto.status
+          status: orderPaginationDto.status
         }
       }),
       meta: {
         total: totalPages,
         page: currentPage,
-        lastPage: Math.ceil(totalPages / perPage)
+        lastPage: Math.ceil( totalPages / perPage )
       }
-
-    };
-    
-    return orders;
-  }
-
-  async getOrderById(id: string) {
-    const order = await this.order.findUnique({
-      where: { id },
-    });
-
-    if (!order) {
-      throw new RpcException({
-        message: `Order with id ${id} not found`,
-        status: HttpStatus.NOT_FOUND
-      })
     }
-    return order;
   }
-
-  /* //generar una función para obtener todas las ordenes
-  //devolverá un array de objetos de tipo Order
   
 
-  
+  async findOne(id: string) {
 
-  //generar una función para cambiar el estado de una orden
-  //recibirá un objeto de tipo UpdateOrderStatusDto
-  //devolverá un objeto de tipo Order
-  async changeOrderStatus(updateOrderStatusDto: UpdateOrderStatusDto) {
-    const order = await this.order.update({
-      where: { id: updateOrderStatusDto.id },
-      data: { status: updateOrderStatusDto.status },
+    const order = await this.order.findFirst({
+      where: { id }
     });
+
+    if ( !order ) {
+      throw new RpcException({ 
+        status: HttpStatus.NOT_FOUND, 
+        message: `Order with id ${ id } not found`
+      });
+    }
+
     return order;
-  } */
 
-  /* remove(id: number) {
-    return `This action removes a #${id} order`;
-  } */
-
-  //generar una función para crear un nueva orden
-  /* create(createOrderDto: CreateOrderDto) {
-    return 'This action adds a new order';
-  } */
-
-  findAll() {
-    return `This action returns all orders`;
   }
 
-  findOne(id: number) {
-    return `This action returns a #${id} order`;
+  async changeStatus(changeOrderStatusDto: UpdateOrderStatusDto) {
+
+    const { id, status } = changeOrderStatusDto;
+
+    const order = await this.findOne(id);
+    if ( order.status === status ) {
+      return order;
+    }
+
+    return this.order.update({
+      where: { id },
+      data: { status: status }
+    });
+
+
   }
+
 
 
 }
