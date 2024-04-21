@@ -1,6 +1,6 @@
-import { HttpStatus, Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { HttpStatus, Inject, Injectable, Logger, OnModuleInit, UnsupportedMediaTypeException } from '@nestjs/common';
 import { CreateOrderDto } from './dto/create-order.dto';
-import { PrismaClient } from '@prisma/client';
+import { OrderStatus, PrismaClient } from '@prisma/client';
 import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { PaginationOrderDto, UpdateOrderStatusDto } from './dto';
 import { PRODUCTS_SERVICE } from 'src/common/config/services';
@@ -24,11 +24,46 @@ export class OrdersService extends PrismaClient implements OnModuleInit {
 
   async create(createOrderDto: CreateOrderDto) {
 
-    const ids = [20, 21];
+    try {
+      const productIds = createOrderDto.items.map(item => item.productId);
+      const products: any[] = await firstValueFrom(this.productsClient.send({ cdm: 'validate_products' }, productIds));
+      const totalAmount = createOrderDto.items.reduce((acc, orderItem) => {
+        const price = products.find(
+          (product) => product.id === orderItem.productId,
+        ).price;
+        return price * orderItem.quantity;
+      }, 0);
 
-    const products = await firstValueFrom(this.productsClient.send({cdm: 'validate_products'}, ids));
+      const totalItems = createOrderDto.items.reduce((acc, orderItem) => {
+        return acc + orderItem.quantity;
+      }, 0);
 
-    return products;
+      const order = await this.order.create({
+        data: {
+          totalAmount: totalAmount,
+          totalItems: totalItems,
+          status: OrderStatus.PENDING,
+          OrderItem: {
+            createMany: {
+              data: []
+            }
+          }
+        }
+      });
+
+      return order;
+
+
+
+    } catch (e) {
+      throw new RpcException({
+        status: HttpStatus.BAD_REQUEST,
+        message: 'Check logs'
+      })
+    }
+
+
+
 
   }
 
