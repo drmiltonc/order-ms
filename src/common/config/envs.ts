@@ -8,13 +8,17 @@ dotenv.config();
 // Define el esquema de validación para las variables de entorno
 const envVarsSchema = joi.object({
     PORT: joi.number().required(),
-    PRODUCTS_MICROSERVICE_HOST: joi.string().required(),
-    PRODUCTS_MICROSERVICE_PORT: joi.number().required()
+    NATS_SERVERS: joi.array().items(joi.string())
+        // Indica que la URL de NATS es obligatoria
+        .required(),
     
 }).unknown(true);
 
 // Valida las variables de entorno utilizando el esquema definido
-const { error, value: envVars } = envVarsSchema.validate(process.env);
+const { error, value: envVars } = envVarsSchema.validate({
+    ...process.env,
+    NATS_SERVERS: process.env.NATS_SERVERS?.split(',')
+});
 
 // Si hay algún error de validación, lanza una excepción
 if (error) {
